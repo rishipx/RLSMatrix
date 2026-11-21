@@ -1,6 +1,14 @@
 # Writing test suites
 
-A suite is a YAML file with **actors** (who is asking) and **probes** (what they run, and what must happen).
+- [Suite format](#suite-format)
+- [Actors](#actors)
+- [Probes](#probes)
+- [Pitfall: `RETURNING`](#pitfall-returning-on-a-probe-that-expects-an-rls-error)
+- [Bundled examples](#bundled-examples)
+
+## Suite format
+
+A suite is a YAML file with **actors** (who is asking) and **probes** (the SQL each actor runs and what must happen).
 
 ```yaml
 name: Document isolation
@@ -27,30 +35,38 @@ probes:
     expect_error: row-level security policy
 ```
 
+Validate offline with `rlsmatrix validate --manifest suite.yaml`.
+
 ## Actors
 
-`role` is the PostgreSQL role the probe runs as. `sub` is exposed as `request.jwt.claim.sub`, and `claims` as `request.jwt.claims`. `role`, and `sub` when set, are added to the claims for you.
+| Field | Meaning |
+|---|---|
+| `id` | Unique name, referenced by probes |
+| `role` | PostgreSQL role the probe runs as |
+| `sub` | Exposed as `request.jwt.claim.sub` |
+| `claims` | Exposed as `request.jwt.claims`; `role` and `sub` are added automatically |
 
 ## Probes
 
-- `sql` must be exactly one `SELECT`, `INSERT`, `UPDATE` or `DELETE`.
-- `expected_rows` is an exact, ordered comparison (default: no rows), so add `ORDER BY`.
-- `expect_error` is a fragment the database error must contain. It cannot be combined with `expected_rows`.
-- Each probe runs in a transaction that is rolled back.
+| Field | Meaning |
+|---|---|
+| `id` | Unique name |
+| `actor` | Must be a declared actor |
+| `sql` | Exactly one `SELECT`, `INSERT`, `UPDATE` or `DELETE` |
+| `expected_rows` | Exact, ordered result (default: no rows), so add `ORDER BY` |
+| `expect_error` | Fragment the database error must contain; cannot be combined with `expected_rows` |
 
-Probe IDs must be unique, and every probe must name a declared actor. Keep fixture IDs fixed: sequence values are not rolled back.
+Each probe runs in a transaction that is rolled back. Keep fixture IDs fixed, because sequence values are not rolled back.
 
-Check a suite without a database with `rlsmatrix validate --manifest suite.yaml`.
+## Pitfall: `RETURNING` on a probe that expects an RLS error
 
-## Do not put `RETURNING` on a probe that expects an RLS error
-
-`INSERT … RETURNING`, and an `UPDATE` that changes a row, must also pass the `SELECT` policy for the new row. That fails with the same message as a failed `WITH CHECK`:
+`INSERT … RETURNING`, and an `UPDATE` that changes a row, must also satisfy the `SELECT` policy for the new row. A failure there produces the same message as a failed `WITH CHECK`:
 
 ```text
 new row violates row-level security policy for table "documents"
 ```
 
-So this probe passes whether or not the insert policy is correct, and a widened `WITH CHECK` goes unnoticed:
+The probe below therefore passes whether or not the insert policy is correct, and a widened `WITH CHECK` goes unnoticed:
 
 ```yaml
 - id: bob-cannot-insert-for-alice
@@ -59,4 +75,30 @@ So this probe passes whether or not the insert policy is correct, and a widened 
   expect_error: row-level security policy
 ```
 
-Drop the `RETURNING` so only `WITH CHECK` can produce the error. For `UPDATE` policies, test the check with a row that stays visible to the actor, for example moving a project to an organization the actor can read but does not administer. The `org_projects` example does this. A surviving `OPEN_WITH_CHECK` mutation is how this kind of gap shows up.
+**Fix:** drop `RETURNING` so only `WITH CHECK` can raise the error. For `UPDATE` policies, test the check with a row that stays visible to the actor, such as moving a project to an organization the actor can read but does not administer (the `org_projects` example does this). A surviving `OPEN_WITH_CHECK` mutation is how this gap shows up.
+
+## Bundled examples
+
+Five schemas ship in `src/rlsmatrix/examples/`. The web app loads them as presets, and the test suite validates every `suite*.yaml`.
+
+| Schema | Suite | Operators | Mutations | Score | Adjusted |
+|---|---|---|---:|---:|---:|
+| `tenant_isolation` | `suite_first_draft.yaml` | core | 7 | 28.6% | 40.0% |
+| `tenant_isolation` | `suite.yaml` | core | 7 | 71.4% | 100% |
+| `org_projects` | `suite.yaml` | core | 16 | 100% | 100% |
+| `support_tickets` | `suite.yaml` | core | 14 | 64.3% | 100% |
+| `shared_notes` | `suite_first_draft.yaml` | core | 4 | 100% | 100% |
+| `shared_notes` | `suite_first_draft.yaml` | core, predicate | 11 | 81.8% | 81.8% |
+| `shared_notes` | `suite.yaml` | core, predicate | 11 | 100% | 100% |
+| `owner_force_rls` | `suite.yaml` | all | 7 | 71.4% | 83.3% |
+| `owner_force_rls` | `suite_no_owner.yaml` | all | 7 | 57.1% | 80.0% |
+
+| Schema | Setup | Lesson |
+|---|---|---|
+| `tenant_isolation` | Two tenants, one table | In `suite.yaml` the two survivors are `WIDEN_TO_PUBLIC` changes that do nothing for `anon`, whose `auth.uid()` is `NULL`. The first-draft suite shows the opposite case: three of its five survivors are real gaps. |
+| `org_projects` | Members, admins, a `RESTRICTIVE` policy, `SECURITY DEFINER` helpers | Scores 100% on core, yet `--operators WIDEN_COMMAND` shows nothing notices if the `RESTRICTIVE` `projects_hide_archived` policy is widened to every command. |
+| `support_tickets` | Roles from a custom JWT claim (customer, agent, admin) | All five survivors are harmless: either for the same `anon` reason as above, or because an update policy's `WITH CHECK` equals its `USING`, so opening it never changes an outcome. |
+| `shared_notes` | One compound policy: `(owner OR shared) AND NOT archived` | The first-draft suite kills every core mutation and looks finished. With `core,predicate`, two `DROP_CLAUSE` mutations survive as *changes behavior*: nothing checks the `archived` clause or the `shared` branch. `suite.yaml` adds one probe that closes both. |
+| `owner_force_rls` | Table owner is also an application role, under `FORCE ROW LEVEL SECURITY` | `NO_FORCE_RLS` is caught only when an actor is the table owner. Without one it survives, and is deliberately left unlabelled rather than called harmless, because the equivalence check cannot see an owner you did not declare. |
+
+A 100% score is not always the goal. Understanding each survivor is.

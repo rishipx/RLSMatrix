@@ -34,8 +34,8 @@ Stop it with `docker stop rlsmatrix-pg`.
 - Keep database access limited to the Compose sandbox.
 - Add tests for behavior changes, including security boundaries where relevant.
 - Pass SQL values as parameters and build identifiers with `psycopg.sql.Identifier`.
-- A new mutation operator needs an entry in `OPERATORS` and in `SURVIVOR_HINTS`, a case in the generator (predicate-level operators live in `mutations/predicates.py`), unit tests, and a row in [docs/mutation-operators.md](docs/mutation-operators.md). Make it opt-in, outside the `core` group, until the bundled examples have been run with it without errors.
-- A new example goes in `src/rlsmatrix/examples/<name>/` with a `schema.sql` and a `suite.yaml`, and is added to `PRESETS` in `ui/presets.py` and to [docs/examples.md](docs/examples.md).
+- A new mutation operator needs an entry in `OPERATORS` and in `SURVIVOR_HINTS`, a case in the generator (predicate-level operators live in `mutations/predicates.py`), unit tests, and a row in [docs/results.md](docs/results.md). Make it opt-in, outside the `core` group, until the bundled examples have been run with it without errors.
+- A new example goes in `src/rlsmatrix/examples/<name>/` with a `schema.sql` and a `suite.yaml`, and is added to `PRESETS` in `ui/presets.py` and to [docs/writing-suites.md#bundled-examples](docs/writing-suites.md#bundled-examples).
 - Do not commit `.env` files, credentials or production data.
 
 ## Pull requests

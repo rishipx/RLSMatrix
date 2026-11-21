@@ -1,8 +1,10 @@
 # Continuous integration
 
+Two ways to gate a pipeline on the mutation score.
+
 ## GitHub Action
 
-The repository is also a composite action. It starts a throwaway PostgreSQL container, runs a campaign, writes the Markdown report to the job summary, and fails the step if the score is below your threshold.
+The repository is a composite action. It starts a throwaway PostgreSQL container, runs a campaign, writes the Markdown report to the job summary, and fails the step if the score is below your threshold.
 
 ```yaml
 jobs:
@@ -24,16 +26,16 @@ jobs:
 | `bootstrap` | required | Path to the schema and fixture SQL |
 | `manifest` | required | Path to the YAML suite |
 | `operators` | `core` | Operators or groups: `core`, `predicate`, `shape`, `all` |
-| `min-score` | none | Fail the step if the score is lower than this percentage |
+| `min-score` | none | Fail the step below this percentage |
 | `exclude-equivalent` | `false` | Apply `min-score` to the adjusted score |
 | `allow-errors` | `false` | Do not fail when some mutations could not be evaluated |
 | `workers` | `4` | Parallel workers, 1 to 16 |
 | `python-version` | `3.12` | Python used to run RLSMatrix |
-| `postgres-image` | `postgres:16-alpine` | Image for the sandbox database |
+| `postgres-image` | `postgres:16-alpine` | Sandbox database image |
 
-The `score` output holds the mutation score as a percentage. The report logic lives in `scripts/action-run.sh`, which the integration tests exercise.
+The `score` output holds the mutation score as a percentage, e.g. `81.8`. The report logic lives in `scripts/action-run.sh`, which the integration tests exercise.
 
-## A generic gate with Docker Compose
+## Generic gate with Docker Compose
 
 ```yaml
 - name: Prepare sandbox password
@@ -54,7 +56,7 @@ The `score` output holds the mutation score as a percentage. The report logic li
 
 ## Without Compose
 
-RLSMatrix connects only to a PostgreSQL host named `postgres`. On a CI runner, start a PostgreSQL 16 container, map the name, and set the password:
+RLSMatrix connects only to a host named `postgres`. Start a PostgreSQL 16 container, map the name, and set the password:
 
 ```bash
 export RLSMATRIX_DB_PASSWORD="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
