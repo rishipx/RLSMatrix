@@ -62,7 +62,7 @@ dev = [
   "pandas>=2.1,<4",
   "pytest>=8,<10",
   "ruff>=0.8,<1",
-  "mypy>=1.10,<2",
+  "mypy>=1.10,<3",
   "types-PyYAML",
   "build>=1.2,<2",
   "pre-commit>=3.7,<5",
