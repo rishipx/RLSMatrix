@@ -1,0 +1,44 @@
+# Environment and credentials
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+.netrc
+.pypirc
+.npmrc
+credentials*.json
+*service-account*.json
+*.tfstate
+*.tfstate.*
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+build/
+dist/
+
+# Test and tooling outputs
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+*.log
+
+# Editors and operating systems
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo

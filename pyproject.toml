@@ -1,0 +1,120 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rlsmatrix"
+dynamic = ["version"]
+description = "Mutation testing for PostgreSQL Row-Level Security policies: break your RLS on purpose and see which tests notice."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE", "src/rlsmatrix/ui/static/OFL-*.txt"]
+authors = [{ name = "rishipx" }]
+keywords = [
+  "postgresql",
+  "supabase",
+  "row-level-security",
+  "rls",
+  "mutation-testing",
+  "security-testing",
+  "authorization",
+]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Environment :: Console",
+  "Environment :: Web Environment",
+  "Framework :: Streamlit",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Database",
+  "Topic :: Security",
+  "Typing :: Typed",
+]
+dependencies = [
+  "psycopg[binary]>=3.2,<4",
+  "pydantic>=2.8,<3",
+  "PyYAML>=6,<7",
+  "pglast>=6,<8",
+  "sqlparse>=0.5,<1",
+]
+
+[project.urls]
+Homepage = "https://github.com/rishipx/RLSMatrix"
+Documentation = "https://github.com/rishipx/RLSMatrix/tree/main/docs"
+Issues = "https://github.com/rishipx/RLSMatrix/issues"
+
+[project.scripts]
+rlsmatrix = "rlsmatrix.cli:main"
+
+[project.optional-dependencies]
+# The web app. The command line needs none of this.
+ui = [
+  "streamlit>=1.50,<2",
+  "pandas>=2.1,<4",
+]
+dev = [
+  "streamlit>=1.50,<2",
+  "pandas>=2.1,<4",
+  "pytest>=8,<10",
+  "ruff>=0.8,<1",
+  "mypy>=1.10,<2",
+  "types-PyYAML",
+  "build>=1.2,<2",
+  "pre-commit>=3.7,<5",
+]
+
+[tool.setuptools.dynamic]
+version = { attr = "rlsmatrix.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+rlsmatrix = [
+  "py.typed",
+  "ui/static/*.woff2",
+  "ui/static/OFL-*.txt",
+  "examples/*/*.sql",
+  "examples/*/*.yaml",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-ra --strict-markers"
+markers = [
+  "integration: needs the PostgreSQL sandbox (skipped when unavailable)",
+]
+
+[tool.ruff]
+line-length = 88
+src = ["src", "tests"]
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["rlsmatrix"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+mypy_path = "src"
+packages = ["rlsmatrix"]
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = ["pglast.*", "sqlparse.*", "streamlit.*", "pandas.*"]
+ignore_missing_imports = true

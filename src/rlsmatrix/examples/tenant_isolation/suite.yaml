@@ -1,0 +1,69 @@
+name: Two-tenant document isolation
+
+actors:
+  - id: anonymous
+    role: anon
+    claims:
+      role: anon
+
+  - id: alice
+    role: authenticated
+    sub: 11111111-1111-1111-1111-111111111111
+    claims:
+      role: authenticated
+
+  - id: bob
+    role: authenticated
+    sub: 22222222-2222-2222-2222-222222222222
+    claims:
+      role: authenticated
+
+  - id: service
+    role: service_role
+    claims:
+      role: service_role
+
+probes:
+  - id: anonymous-sees-no-documents
+    actor: anonymous
+    description: Anonymous requests must not see tenant documents.
+    sql: SELECT id FROM public.documents ORDER BY id;
+    expected_rows: []
+
+  - id: alice-sees-only-her-document
+    actor: alice
+    description: Alice can read her own row and not Bob's row.
+    sql: SELECT id FROM public.documents ORDER BY id;
+    expected_rows:
+      - [1]
+
+  - id: bob-sees-only-his-document
+    actor: bob
+    description: Bob can read his own row and not Alice's row.
+    sql: SELECT id FROM public.documents ORDER BY id;
+    expected_rows:
+      - [2]
+
+  - id: alice-can-insert-her-own-document
+    actor: alice
+    description: The owner can create a row attributed to herself.
+    sql: INSERT INTO public.documents (id, owner_id, body) VALUES (10, '11111111-1111-1111-1111-111111111111', 'temporary') RETURNING id;
+    expected_rows:
+      - [10]
+
+  # Note: no RETURNING here. RETURNING also requires the new row to pass the
+  # SELECT policy, which raises the *same* error text even if WITH CHECK were
+  # wide open. With RETURNING this probe cannot detect OPEN_WITH_CHECK.
+  - id: bob-cannot-insert-for-alice
+    actor: bob
+    description: A tenant cannot create a row owned by another tenant.
+    sql: INSERT INTO public.documents (id, owner_id, body) VALUES (11, '11111111-1111-1111-1111-111111111111', 'forged');
+    expect_error: row-level security policy
+
+  - id: service-role-bypasses-rls
+    actor: service
+    description: The privileged service role intentionally bypasses row policies.
+    sql: SELECT id FROM public.documents ORDER BY id;
+    expected_rows:
+      - [1]
+      - [2]

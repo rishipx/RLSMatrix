@@ -1,0 +1,93 @@
+name: RLSMatrix
+description: >-
+  Mutation-test PostgreSQL Row-Level Security policies. Breaks your policies on
+  purpose in a throwaway database and reports which tests notice.
+author: rishipx
+branding:
+  icon: shield
+  color: blue
+
+inputs:
+  bootstrap:
+    description: Path to the schema and fixture SQL file.
+    required: true
+  manifest:
+    description: Path to the YAML test manifest.
+    required: true
+  operators:
+    description: "Comma-separated operators or groups: core, predicate, shape, all."
+    default: core
+  min-score:
+    description: Fail the step if the mutation score is lower than this percentage.
+    default: ""
+  exclude-equivalent:
+    description: Apply min-score to the score that leaves out likely-equivalent survivors.
+    default: "false"
+  allow-errors:
+    description: Do not fail when some mutations could not be evaluated.
+    default: "false"
+  workers:
+    description: Parallel workers, 1 to 16.
+    default: "4"
+  python-version:
+    description: Python version used to run RLSMatrix.
+    default: "3.12"
+  postgres-image:
+    description: PostgreSQL image for the throwaway sandbox database.
+    default: postgres:16-alpine
+
+outputs:
+  score:
+    description: The mutation score as a percentage, for example 81.8.
+    value: ${{ steps.campaign.outputs.score }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Start the sandbox database
+      shell: bash
+      env:
+        POSTGRES_IMAGE: ${{ inputs.postgres-image }}
+      run: |
+        password="$(openssl rand -hex 24)"
+        echo "::add-mask::$password"
+        echo "RLSMATRIX_DB_PASSWORD=$password" >> "$GITHUB_ENV"
+        docker run -d --name rlsmatrix-postgres \
+          -e POSTGRES_PASSWORD="$password" \
+          -p 127.0.0.1:5432:5432 \
+          --tmpfs /var/lib/postgresql/data \
+          "$POSTGRES_IMAGE" \
+          postgres -c max_connections=120 -c fsync=off -c synchronous_commit=off \
+          -c full_page_writes=off
+        for _ in $(seq 1 60); do
+          docker exec rlsmatrix-postgres pg_isready -U postgres && break
+          sleep 1
+        done
+        # RLSMatrix only connects to a host named "postgres".
+        echo "127.0.0.1 postgres" | sudo tee -a /etc/hosts
+
+    - name: Install RLSMatrix
+      shell: bash
+      run: python -m pip install "$GITHUB_ACTION_PATH"
+
+    - name: Run the mutation campaign
+      id: campaign
+      shell: bash
+      env:
+        INPUT_BOOTSTRAP: ${{ inputs.bootstrap }}
+        INPUT_MANIFEST: ${{ inputs.manifest }}
+        INPUT_OPERATORS: ${{ inputs.operators }}
+        INPUT_MIN_SCORE: ${{ inputs.min-score }}
+        INPUT_EXCLUDE_EQUIVALENT: ${{ inputs.exclude-equivalent }}
+        INPUT_ALLOW_ERRORS: ${{ inputs.allow-errors }}
+        INPUT_WORKERS: ${{ inputs.workers }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/action-run.sh"
+
+    - name: Remove the sandbox database
+      if: always()
+      shell: bash
+      run: docker rm -f rlsmatrix-postgres || true

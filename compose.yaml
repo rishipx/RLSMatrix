@@ -1,0 +1,54 @@
+name: rlsmatrix
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: ${RLSMATRIX_DB_PASSWORD:?Set RLSMATRIX_DB_PASSWORD in .env}
+    command:
+      - postgres
+      - -c
+      - max_connections=120
+      # The data lives on tmpfs and is discarded, so durability only costs time.
+      - -c
+      - fsync=off
+      - -c
+      - synchronous_commit=off
+      - -c
+      - full_page_writes=off
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    networks:
+      - sandbox
+
+  app:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      RLSMATRIX_DB_HOST: postgres
+      RLSMATRIX_DB_PASSWORD: ${RLSMATRIX_DB_PASSWORD:?Set RLSMATRIX_DB_PASSWORD in .env}
+      RLSMATRIX_WORKERS: ${RLSMATRIX_WORKERS:-4}
+      RLSMATRIX_STATEMENT_TIMEOUT_MS: ${RLSMATRIX_STATEMENT_TIMEOUT_MS:-5000}
+      RLSMATRIX_MAX_MUTATIONS: ${RLSMATRIX_MAX_MUTATIONS:-500}
+    ports:
+      - "127.0.0.1:${RLSMATRIX_APP_PORT:-8501}:8501"
+    networks:
+      - sandbox
+      - web
+    read_only: true
+    tmpfs:
+      - /tmp
+
+networks:
+  # The database can only be reached from the app: no route in or out.
+  sandbox:
+    internal: true
+  # Lets the app publish its port on localhost.
+  web: {}

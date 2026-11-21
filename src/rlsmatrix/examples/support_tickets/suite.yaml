@@ -1,0 +1,94 @@
+name: Support tickets with claim-based roles
+
+# Every human is the same database role (authenticated). What separates a
+# customer from an agent or an admin is the app_role claim in their JWT.
+actors:
+  - id: anonymous
+    role: anon
+    claims: {role: anon}
+  - id: alice
+    role: authenticated
+    sub: 11111111-1111-1111-1111-111111111111
+    claims: {role: authenticated, app_role: customer}
+  - id: bob
+    role: authenticated
+    sub: 22222222-2222-2222-2222-222222222222
+    claims: {role: authenticated, app_role: customer}
+  - id: agent
+    role: authenticated
+    sub: 44444444-4444-4444-4444-444444444444
+    claims: {role: authenticated, app_role: agent}
+  - id: admin
+    role: authenticated
+    sub: 55555555-5555-5555-5555-555555555555
+    claims: {role: authenticated, app_role: admin}
+  - id: service
+    role: service_role
+    claims: {role: service_role}
+
+probes:
+  - id: anonymous-sees-no-tickets
+    actor: anonymous
+    sql: SELECT id FROM public.tickets ORDER BY id;
+    expected_rows: []
+
+  - id: customer-sees-only-own-tickets
+    actor: alice
+    sql: SELECT id FROM public.tickets ORDER BY id;
+    expected_rows: [[1], [2]]
+
+  - id: other-customer-sees-only-own-tickets
+    actor: bob
+    sql: SELECT id FROM public.tickets ORDER BY id;
+    expected_rows: [[3]]
+
+  - id: agent-sees-every-ticket
+    actor: agent
+    sql: SELECT id FROM public.tickets ORDER BY id;
+    expected_rows: [[1], [2], [3]]
+
+  - id: customer-can-open-a-ticket
+    actor: alice
+    sql: INSERT INTO public.tickets (id, customer_id, subject) VALUES (10, '11111111-1111-1111-1111-111111111111', 'New') RETURNING id;
+    expected_rows: [[10]]
+
+  - id: customer-cannot-open-a-ticket-for-someone-else
+    actor: bob
+    description: No RETURNING, so only WITH CHECK can produce this error.
+    sql: INSERT INTO public.tickets (id, customer_id, subject) VALUES (11, '11111111-1111-1111-1111-111111111111', 'Forged');
+    expect_error: row-level security policy
+
+  - id: anonymous-cannot-open-a-ticket
+    actor: anonymous
+    sql: INSERT INTO public.tickets (id, customer_id, subject) VALUES (12, '11111111-1111-1111-1111-111111111111', 'Anon');
+    expect_error: row-level security policy
+
+  - id: customer-cannot-change-a-ticket
+    actor: alice
+    sql: UPDATE public.tickets SET status = 'closed' WHERE id = 1 RETURNING id;
+    expected_rows: []
+
+  - id: agent-can-change-a-ticket
+    actor: agent
+    sql: UPDATE public.tickets SET status = 'closed' WHERE id = 1 RETURNING id;
+    expected_rows: [[1]]
+
+  - id: agent-cannot-delete-a-ticket
+    actor: agent
+    sql: DELETE FROM public.tickets WHERE id = 1 RETURNING id;
+    expected_rows: []
+
+  - id: customer-cannot-delete-a-ticket
+    actor: alice
+    sql: DELETE FROM public.tickets WHERE id = 1 RETURNING id;
+    expected_rows: []
+
+  - id: admin-can-delete-a-ticket
+    actor: admin
+    sql: DELETE FROM public.tickets WHERE id = 3 RETURNING id;
+    expected_rows: [[3]]
+
+  - id: service-role-bypasses-rls
+    actor: service
+    sql: SELECT id FROM public.tickets ORDER BY id;
+    expected_rows: [[1], [2], [3]]

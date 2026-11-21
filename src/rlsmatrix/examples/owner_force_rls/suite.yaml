@@ -1,0 +1,28 @@
+# The table owner is an actor, so removing FORCE ROW LEVEL SECURITY is noticed.
+name: Table owner under FORCE ROW LEVEL SECURITY
+
+actors:
+  - id: owner
+    role: app_owner
+    claims:
+      role: app_owner
+
+  - id: reader
+    role: reader
+    claims:
+      role: reader
+
+probes:
+  - id: reader-sees-public-rows-only
+    actor: reader
+    description: A reader gets the public row and not the private one.
+    sql: SELECT id FROM app.ledger ORDER BY id;
+    expected_rows:
+      - [1]
+
+  - id: owner-is-bound-by-the-policy
+    actor: owner
+    description: With FORCE, even the table owner sees only public rows.
+    sql: SELECT id FROM app.ledger ORDER BY id;
+    expected_rows:
+      - [1]

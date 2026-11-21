@@ -1,0 +1,37 @@
+[server]
+headless = true
+maxUploadSize = 10
+enableCORS = true
+enableXsrfProtection = true
+enableStaticServing = true
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+primaryColor = "#1f6f8b"
+font = "IBM Plex Sans"
+headingFont = "IBM Plex Sans"
+codeFont = "IBM Plex Mono"
+headingFontSizes = ["1.75rem", "1.4rem", "1.15rem"]
+headingFontWeights = 600
+
+[[theme.fontFaces]]
+family = "IBM Plex Sans"
+url = "app/static/ibm-plex-sans-400.woff2"
+weight = 400
+
+[[theme.fontFaces]]
+family = "IBM Plex Sans"
+url = "app/static/ibm-plex-sans-500.woff2"
+weight = 500
+
+[[theme.fontFaces]]
+family = "IBM Plex Sans"
+url = "app/static/ibm-plex-sans-600.woff2"
+weight = 600
+
+[[theme.fontFaces]]
+family = "IBM Plex Mono"
+url = "app/static/ibm-plex-mono-400.woff2"
+weight = 400

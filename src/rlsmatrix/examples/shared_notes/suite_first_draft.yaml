@@ -1,0 +1,30 @@
+# Looks complete: it kills every core mutation (a score of 100%).
+# Run it with `--operators core,predicate` and the predicate-level mutations show that it
+# never checks the `archived` clause or the `shared` branch of the policy.
+name: Shared notes, first draft
+
+actors:
+  - id: anonymous
+    role: anon
+    claims:
+      role: anon
+
+  - id: alice
+    role: authenticated
+    sub: 11111111-1111-1111-1111-111111111111
+    claims:
+      role: authenticated
+
+probes:
+  - id: anonymous-sees-no-notes
+    actor: anonymous
+    description: Anonymous requests must not read any note.
+    sql: SELECT id FROM public.notes ORDER BY id;
+    expected_rows: []
+
+  - id: alice-reads-hers-and-not-bobs-private-note
+    actor: alice
+    description: Alice sees her private note and not Bob's private note.
+    sql: SELECT id FROM public.notes WHERE id IN (1, 4) ORDER BY id;
+    expected_rows:
+      - [1]

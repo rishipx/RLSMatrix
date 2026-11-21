@@ -1,0 +1,115 @@
+name: Org-scoped projects
+
+actors:
+  - id: anonymous
+    role: anon
+    claims: {role: anon}
+  - id: alice
+    role: authenticated
+    sub: 11111111-1111-1111-1111-111111111111
+    claims: {role: authenticated}
+  - id: bob
+    role: authenticated
+    sub: 22222222-2222-2222-2222-222222222222
+    claims: {role: authenticated}
+  - id: carol
+    role: authenticated
+    sub: 33333333-3333-3333-3333-333333333333
+    claims: {role: authenticated}
+  - id: service
+    role: service_role
+    claims: {role: service_role}
+
+# alice = admin of org 1 and plain member of org 2; bob = member of org 1;
+# carol = admin of org 2.
+# Project 4 is archived and must stay hidden from everyone.
+probes:
+  - id: anonymous-sees-nothing
+    actor: anonymous
+    sql: SELECT id FROM public.projects ORDER BY id;
+    expected_rows: []
+
+  - id: alice-sees-active-projects-of-her-orgs
+    actor: alice
+    sql: SELECT id FROM public.projects ORDER BY id;
+    expected_rows: [[1], [2], [3]]
+
+  - id: bob-sees-org1-active-projects
+    actor: bob
+    sql: SELECT id FROM public.projects ORDER BY id;
+    expected_rows: [[1], [2]]
+
+  - id: carol-sees-only-org2
+    actor: carol
+    sql: SELECT id FROM public.projects ORDER BY id;
+    expected_rows: [[3]]
+
+  - id: member-cannot-update
+    actor: bob
+    sql: UPDATE public.projects SET name = 'hijack' WHERE id = 1 RETURNING id;
+    expected_rows: []
+
+  - id: admin-can-update
+    actor: alice
+    sql: UPDATE public.projects SET name = 'Apollo v2' WHERE id = 1 RETURNING id;
+    expected_rows: [[1]]
+
+  - id: member-only-org-cannot-update
+    actor: alice
+    description: Alice is only a member of org 2, so she cannot edit its projects.
+    sql: UPDATE public.projects SET name = 'hijack' WHERE id = 3 RETURNING id;
+    expected_rows: []
+
+  - id: admin-cannot-move-project-to-org-she-does-not-administer
+    actor: alice
+    description: >-
+      The new row stays visible to Alice (she is a member of org 2), so only the
+      UPDATE policy's WITH CHECK can reject it.
+    sql: UPDATE public.projects SET org_id = 2 WHERE id = 1;
+    expect_error: row-level security policy
+
+  - id: member-can-insert
+    actor: bob
+    sql: INSERT INTO public.projects (id, org_id, name) VALUES (20, 1, 'New') RETURNING id;
+    expected_rows: [[20]]
+
+  - id: member-cannot-insert-into-other-org
+    actor: bob
+    description: No RETURNING, so only WITH CHECK can produce this error.
+    sql: INSERT INTO public.projects (id, org_id, name) VALUES (21, 2, 'Forged');
+    expect_error: row-level security policy
+
+  - id: member-cannot-delete
+    actor: bob
+    sql: DELETE FROM public.projects WHERE id = 2 RETURNING id;
+    expected_rows: []
+
+  - id: admin-can-delete
+    actor: alice
+    sql: DELETE FROM public.projects WHERE id = 2 RETURNING id;
+    expected_rows: [[2]]
+
+  - id: member-only-org-cannot-delete
+    actor: alice
+    sql: DELETE FROM public.projects WHERE id = 3 RETURNING id;
+    expected_rows: []
+
+  - id: anonymous-cannot-update
+    actor: anonymous
+    sql: UPDATE public.projects SET name = 'x' WHERE id = 1 RETURNING id;
+    expected_rows: []
+
+  - id: anonymous-cannot-delete
+    actor: anonymous
+    sql: DELETE FROM public.projects WHERE id = 1 RETURNING id;
+    expected_rows: []
+
+  - id: anonymous-cannot-insert
+    actor: anonymous
+    sql: INSERT INTO public.projects (id, org_id, name) VALUES (22, 1, 'Anon');
+    expect_error: row-level security policy
+
+  - id: service-role-bypasses-rls
+    actor: service
+    sql: SELECT id FROM public.projects ORDER BY id;
+    expected_rows: [[1], [2], [3], [4]]

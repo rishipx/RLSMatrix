@@ -1,0 +1,38 @@
+# The first draft plus one probe that lists everything Alice may read.
+# It pins down both the shared branch and the archived clause.
+name: Shared notes
+
+actors:
+  - id: anonymous
+    role: anon
+    claims:
+      role: anon
+
+  - id: alice
+    role: authenticated
+    sub: 11111111-1111-1111-1111-111111111111
+    claims:
+      role: authenticated
+
+probes:
+  - id: anonymous-sees-no-notes
+    actor: anonymous
+    description: Anonymous requests must not read any note.
+    sql: SELECT id FROM public.notes ORDER BY id;
+    expected_rows: []
+
+  - id: alice-reads-hers-and-not-bobs-private-note
+    actor: alice
+    description: Alice sees her private note and not Bob's private note.
+    sql: SELECT id FROM public.notes WHERE id IN (1, 4) ORDER BY id;
+    expected_rows:
+      - [1]
+
+  - id: alice-sees-shared-notes-but-never-archived-ones
+    actor: alice
+    description: Alice sees her own and shared notes. Archived note 3 stays hidden.
+    sql: SELECT id FROM public.notes ORDER BY id;
+    expected_rows:
+      - [1]
+      - [2]
+      - [5]
